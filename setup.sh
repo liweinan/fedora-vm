@@ -3,6 +3,22 @@
 # 设置错误时退出（当任何命令返回非零状态时立即退出）
 set -e
 
+# 默认代理设置
+PROXY="http://localhost:7890"
+
+# 解析命令行参数
+while getopts "p:" opt; do
+  case $opt in
+    p)
+      PROXY="$OPTARG"
+      ;;
+    \?)
+      echo "无效的选项: -$OPTARG" >&2
+      exit 1
+      ;;
+  esac
+done
+
 # 颜色定义（用于美化输出）
 RED='\033[0;31m'    # 红色，用于错误信息
 GREEN='\033[0;32m'  # 绿色，用于成功信息
@@ -51,13 +67,14 @@ check_requirements() {
 # 包括下载和验证文件完整性
 download_iso() {
     info "开始下载 Fedora ISO..."
+    info "使用代理: $PROXY"
     
     # 创建下载目录（如果不存在）
     mkdir -p downloads
     
     # 下载 Fedora Server ISO（如果文件不存在）
     if [ ! -f "downloads/Fedora-Server-dvd-x86_64-41-1.4.iso" ]; then
-        curl -L "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/x86_64/iso/Fedora-Server-dvd-x86_64-41-1.4.iso" \
+        curl -x "$PROXY" -L "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/x86_64/iso/Fedora-Server-dvd-x86_64-41-1.4.iso" \
             -o "downloads/Fedora-Server-dvd-x86_64-41-1.4.iso"
     else
         info "ISO 文件已存在，跳过下载"
@@ -65,7 +82,7 @@ download_iso() {
     
     # 下载并验证 SHA256 校验和
     info "验证 ISO 文件完整性..."
-    curl -L "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/x86_64/iso/Fedora-Server-41-1.4-x86_64-CHECKSUM" \
+    curl -x "$PROXY" -L "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/x86_64/iso/Fedora-Server-41-1.4-x86_64-CHECKSUM" \
         -o "downloads/CHECKSUM"
     
     # 进入下载目录并验证文件
@@ -136,6 +153,15 @@ EOF
     info "Vagrantfile 创建完成"
 }
 
+# 显示使用帮助
+show_help() {
+    echo "用法: $0 [-p proxy_url]"
+    echo "选项:"
+    echo "  -p proxy_url    设置代理服务器 (默认: http://localhost:7890)"
+    echo "  -h             显示此帮助信息"
+    exit 0
+}
+
 # 主函数：执行所有步骤
 main() {
     info "开始自动化安装流程..."
@@ -154,6 +180,11 @@ main() {
     info "3. 使用 'vagrant box add' 添加 box"
     info "4. 运行 'vagrant up' 启动虚拟机"
 }
+
+# 处理帮助参数
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+fi
 
 # 执行主函数
 main 
