@@ -36,6 +36,18 @@ check_requirements() {
         exit 1
     fi
     
+    # 检查 VirtualBox 内核扩展是否已加载
+    if ! kextstat | grep -q "org.virtualbox.kext.VBoxNetAdp"; then
+        error "VirtualBox 网络适配器内核扩展未加载"
+        error "请按照以下步骤操作："
+        error "1. 打开系统偏好设置 > 安全性与隐私 > 通用"
+        error "2. 点击左下角的锁图标并输入密码"
+        error "3. 在 '允许来自以下位置的应用程序' 中选择 '任何来源'"
+        error "4. 重新启动 VirtualBox"
+        error "5. 如果仍然无法加载，请尝试重新安装 VirtualBox"
+        exit 1
+    fi
+    
     info "所有必要的软件已安装"
 }
 
@@ -46,8 +58,23 @@ create_hostonly_network() {
     # 检查 vboxnet0 是否存在
     if ! VBoxManage list hostonlyifs | grep -q "vboxnet0"; then
         info "创建 vboxnet0 接口..."
-        VBoxManage hostonlyif create
-        VBoxManage hostonlyif ipconfig vboxnet0 --ip 192.168.56.1 --netmask 255.255.255.0
+        
+        # 尝试创建接口
+        if ! VBoxManage hostonlyif create; then
+            error "创建 vboxnet0 接口失败"
+            error "请尝试以下解决方案："
+            error "1. 确保 VirtualBox 已完全关闭"
+            error "2. 在终端中运行：sudo kextload -b org.virtualbox.kext.VBoxNetAdp"
+            error "3. 如果上述命令失败，请尝试重新安装 VirtualBox"
+            error "4. 重新启动电脑"
+            exit 1
+        fi
+        
+        # 配置接口
+        if ! VBoxManage hostonlyif ipconfig vboxnet0 --ip 192.168.56.1 --netmask 255.255.255.0; then
+            error "配置 vboxnet0 接口失败"
+            exit 1
+        fi
     else
         info "vboxnet0 接口已存在"
     fi
