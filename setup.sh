@@ -5,12 +5,17 @@ set -e
 
 # 默认代理设置
 PROXY="http://localhost:7890"
+# 默认架构设置
+ARCH="x86_64"
 
 # 解析命令行参数
-while getopts "p:" opt; do
+while getopts "p:a:" opt; do
   case $opt in
     p)
       PROXY="$OPTARG"
+      ;;
+    a)
+      ARCH="$OPTARG"
       ;;
     \?)
       echo "无效的选项: -$OPTARG" >&2
@@ -18,6 +23,13 @@ while getopts "p:" opt; do
       ;;
   esac
 done
+
+# 验证架构参数
+if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" ]]; then
+    echo "不支持的架构: $ARCH"
+    echo "支持的架构: x86_64, aarch64"
+    exit 1
+fi
 
 # 颜色定义（用于美化输出）
 RED='\033[0;31m'    # 红色，用于错误信息
@@ -68,26 +80,36 @@ check_requirements() {
 download_iso() {
     info "开始下载 Fedora ISO..."
     info "使用代理: $PROXY"
+    info "目标架构: $ARCH"
     
     # 创建下载目录（如果不存在）
     mkdir -p downloads
     
+    # 根据架构选择下载链接
+    if [ "$ARCH" = "aarch64" ]; then
+        ISO_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/aarch64/iso/Fedora-Server-dvd-aarch64-41-1.4.iso"
+        CHECKSUM_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/aarch64/iso/Fedora-Server-41-1.4-aarch64-CHECKSUM"
+        ISO_FILE="Fedora-Server-dvd-aarch64-41-1.4.iso"
+    else
+        ISO_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/x86_64/iso/Fedora-Server-dvd-x86_64-41-1.4.iso"
+        CHECKSUM_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/x86_64/iso/Fedora-Server-41-1.4-x86_64-CHECKSUM"
+        ISO_FILE="Fedora-Server-dvd-x86_64-41-1.4.iso"
+    fi
+    
     # 下载 Fedora Server ISO（如果文件不存在）
-    if [ ! -f "downloads/Fedora-Server-dvd-x86_64-41-1.4.iso" ]; then
-        curl -x "$PROXY" -L "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/x86_64/iso/Fedora-Server-dvd-x86_64-41-1.4.iso" \
-            -o "downloads/Fedora-Server-dvd-x86_64-41-1.4.iso"
+    if [ ! -f "downloads/$ISO_FILE" ]; then
+        curl -x "$PROXY" -L "$ISO_URL" -o "downloads/$ISO_FILE"
     else
         info "ISO 文件已存在，跳过下载"
     fi
     
     # 下载并验证 SHA256 校验和
     info "验证 ISO 文件完整性..."
-    curl -x "$PROXY" -L "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/x86_64/iso/Fedora-Server-41-1.4-x86_64-CHECKSUM" \
-        -o "downloads/CHECKSUM"
+    curl -x "$PROXY" -L "$CHECKSUM_URL" -o "downloads/CHECKSUM"
     
     # 进入下载目录并验证文件
     cd downloads
-    if ! shasum -a 256 -c CHECKSUM 2>&1 | grep -q "Fedora-Server-dvd-x86_64-41-1.4.iso: OK"; then
+    if ! shasum -a 256 -c CHECKSUM 2>&1 | grep -q "$ISO_FILE: OK"; then
         error "ISO 文件校验失败"
         exit 1
     fi
@@ -120,7 +142,7 @@ create_vm() {
     
     # 配置 ISO 安装介质
     VBoxManage storagectl "fedora41-vagrant" --name "IDE Controller" --add ide
-    VBoxManage storageattach "fedora41-vagrant" --storagectl "IDE Controller" --port 0 --device 0 --type dvddrive --medium "downloads/Fedora-Server-dvd-x86_64-41-1.4.iso"
+    VBoxManage storageattach "fedora41-vagrant" --storagectl "IDE Controller" --port 0 --device 0 --type dvddrive --medium "downloads/$ISO_FILE"
     
     info "虚拟机创建完成"
 }
@@ -155,9 +177,10 @@ EOF
 
 # 显示使用帮助
 show_help() {
-    echo "用法: $0 [-p proxy_url]"
+    echo "用法: $0 [-p proxy_url] [-a architecture]"
     echo "选项:"
     echo "  -p proxy_url    设置代理服务器 (默认: http://localhost:7890)"
+    echo "  -a architecture 设置目标架构 (默认: x86_64, 可选: aarch64)"
     echo "  -h             显示此帮助信息"
     exit 0
 }

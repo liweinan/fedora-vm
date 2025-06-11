@@ -1,93 +1,161 @@
-# Fedora VM 自动化部署脚本
+# Fedora VM 自动化安装工具
 
-这个项目提供了自动化脚本，用于在 macOS 上使用 VirtualBox 和 Vagrant 部署 Fedora 虚拟机。
+这是一个用于自动化安装 Fedora 虚拟机的工具脚本。该脚本可以帮助您快速设置和配置 Fedora 虚拟机环境，支持不同架构（x86_64 和 aarch64）的安装。
 
-## 前提条件
+## 功能特点
 
-- macOS 操作系统
-- VirtualBox 7.1.10 或更高版本
-- Vagrant 最新版本
-- 至少 20GB 可用磁盘空间
+- 支持 x86_64 和 aarch64 架构
+- 自动下载和验证 Fedora ISO 文件
+- 自动创建和配置 VirtualBox 虚拟机
+- 自动生成 Vagrant 配置文件
+- 支持代理设置
+- 详细的进度和错误提示
+
+## 系统要求
+
+- VirtualBox
+- Vagrant
+- Bash 环境
+- 足够的磁盘空间（建议至少 50GB）
 - 稳定的网络连接
 
-## 快速开始
+## 安装步骤
 
-1. 克隆此仓库：
-   ```bash
-   git clone <repository-url>
-   cd fedora-vm
-   ```
-
-2. 给脚本添加执行权限：
+1. 确保已安装 VirtualBox 和 Vagrant
+2. 克隆或下载此仓库
+3. 给脚本添加执行权限：
    ```bash
    chmod +x setup.sh
    ```
 
-3. 运行自动化脚本：
-   ```bash
-   ./setup.sh
-   ```
+## 使用方法
 
-## 脚本功能
+### 基本用法
 
-脚本会自动执行以下操作：
+```bash
+./setup.sh
+```
 
-1. 检查必要的软件（VirtualBox 和 Vagrant）是否已安装
-2. 下载 Fedora Server ISO 文件并验证其完整性
-3. 创建并配置 VirtualBox 虚拟机
-4. 创建 Vagrantfile 配置文件
+这将使用默认设置（x86_64 架构）创建虚拟机。
 
-## 手动步骤
+### 高级用法
 
-脚本执行完成后，需要手动完成以下步骤：
+```bash
+./setup.sh -p <proxy_url> -a <architecture>
+```
 
-1. 启动虚拟机并完成 Fedora 安装：
-   - 使用 VirtualBox 启动虚拟机
-   - 按照安装向导完成 Fedora 安装
-   - 创建 vagrant 用户（用户名：vagrant，密码：vagrant）
-   - 确保 vagrant 用户具有 sudo 权限
+参数说明：
+- `-p`: 设置代理服务器（默认：http://localhost:7890）
+- `-a`: 设置目标架构（可选值：x86_64, aarch64，默认：x86_64）
+- `-h`: 显示帮助信息
 
-2. 安装完成后，打包虚拟机为 Vagrant box：
-   ```bash
-   vagrant package --base fedora41-vagrant --output fedora41.box
-   ```
+示例：
+```bash
+# 使用自定义代理下载 ARM 架构的 Fedora
+./setup.sh -p http://your-proxy:port -a aarch64
 
-3. 添加 box 到 Vagrant：
-   ```bash
-   vagrant box add fedora41 fedora41.box
-   ```
+# 仅指定架构
+./setup.sh -a aarch64
 
-4. 启动虚拟机：
-   ```bash
-   vagrant up
-   ```
+# 仅指定代理
+./setup.sh -p http://your-proxy:port
+```
 
-## 网络配置
+## 完整安装流程
 
-- 虚拟机使用 DHCP 自动获取 IP 地址
-- 私有网络配置在 192.168.56.0/24 网段
-- 可以通过 `vagrant ssh` 连接到虚拟机
+### 1. 初始设置
 
-## 故障排除
+运行 setup.sh 脚本：
+```bash
+./setup.sh -a aarch64  # 对于 ARM Mac
+```
 
-1. 如果遇到 VirtualBox 权限问题：
-   - 检查系统偏好设置 > 安全性与隐私 > 通用
-   - 允许 Oracle 软件运行
+### 2. 创建 Host-Only 网络接口
 
-2. 如果网络连接失败：
-   - 检查 VirtualBox 网络设置
-   - 确保 Host-Only 网络适配器已启用
+在运行脚本之前，需要先创建 VirtualBox Host-Only 网络接口：
 
-3. 如果 Vagrant 命令失败：
-   - 运行 `VAGRANT_LOG=info vagrant up` 查看详细日志
-   - 检查 VirtualBox 和 Vagrant 版本兼容性
+```bash
+# 创建 vboxnet0 接口
+VBoxManage hostonlyif create
+
+# 配置 vboxnet0 接口
+VBoxManage hostonlyif ipconfig vboxnet0 --ip 192.168.56.1 --netmask 255.255.255.0
+```
+
+### 3. 安装 Fedora
+
+1. 打开 VirtualBox
+2. 启动名为 "fedora41-vagrant" 的虚拟机
+3. 按照 Fedora 安装向导完成安装：
+   - 选择语言和键盘布局
+   - 配置网络（建议使用 DHCP）
+   - 创建用户（建议创建 vagrant 用户）
+   - 设置 root 密码
+   - 完成安装
+
+### 4. 配置 Vagrant
+
+安装完成后，在虚拟机中执行以下命令：
+
+```bash
+# 安装 Vagrant 公钥
+mkdir -p /home/vagrant/.ssh
+curl -k https://raw.githubusercontent.com/hashicorp/vagrant/master/keys/vagrant.pub > /home/vagrant/.ssh/authorized_keys
+chmod 700 /home/vagrant/.ssh
+chmod 600 /home/vagrant/.ssh/authorized_keys
+chown -R vagrant:vagrant /home/vagrant/.ssh
+
+# 配置 sudo 权限
+echo "vagrant ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/vagrant
+chmod 440 /etc/sudoers.d/vagrant
+```
+
+### 5. 打包和添加 Box
+
+在主机上执行：
+
+```bash
+# 关闭虚拟机
+VBoxManage controlvm fedora41-vagrant poweroff
+
+# 打包虚拟机
+vagrant package --base fedora41-vagrant --output fedora41.box
+
+# 添加 box
+vagrant box add fedora41 fedora41.box
+
+# 启动虚拟机
+vagrant up
+```
 
 ## 注意事项
 
-- 确保有足够的磁盘空间（至少 20GB）
-- 保持稳定的网络连接
-- 建议使用 Fedora Server 版本以获得最佳性能
-- 安装过程中请勿关闭虚拟机
+- 对于 ARM 架构的 Mac（如 M1/M2/M3），必须使用 `-a aarch64` 参数
+- 确保有足够的磁盘空间和内存
+- 下载过程可能需要较长时间，取决于网络状况
+- 如果使用代理，请确保代理服务器可用
+- 必须创建 vboxnet0 网络接口，否则虚拟机网络将无法正常工作
+- 确保 vagrant 用户具有正确的权限和 SSH 配置
+
+## 故障排除
+
+### 常见问题
+
+1. "Interface vboxnet0 doesn't seem to exist"
+   - 运行 `VBoxManage hostonlyif create` 创建接口
+   - 运行 `VBoxManage hostonlyif ipconfig vboxnet0 --ip 192.168.56.1 --netmask 255.255.255.0` 配置接口
+
+2. "Box 'fedora41' could not be found"
+   - 确保已完成 Fedora 安装
+   - 确保已正确打包和添加 box
+
+3. SSH 连接失败
+   - 检查 vagrant 用户的 SSH 配置
+   - 确保 authorized_keys 文件权限正确
+
+4. 网络连接问题
+   - 检查 VirtualBox 网络设置
+   - 确保 vboxnet0 接口配置正确
 
 ## 许可证
 
